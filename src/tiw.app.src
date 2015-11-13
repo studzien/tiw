@@ -1,0 +1,14 @@
+{application, tiw,
+ [
+  {description, "timer wheel helper"},
+  {vsn, "1"},
+  {modules, [
+             tiw
+            ]},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {env, []}
+ ]}.

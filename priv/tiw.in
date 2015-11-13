@@ -1,0 +1,98 @@
+define tiw-slot
+    set $p = tiw[$arg0]
+    while ($p != 0 && $arg0 == $p->slot)
+        printf "%d\n%d\n", $p->slot, $p->count
+        if (etp_smp_compiled)
+            tiw-timeout-symbol-smp
+        else
+            tiw-timeout-symbol-nosmp
+        end
+        printf "\n"
+        set $p = $p->next
+    end
+end
+
+define tiw-timeout-symbol-nosmp
+    if $p->timeout == &timeout_proc
+        tiw-timeout-proc
+    else
+        if $p->timeout == &schedule_port_timeout
+            tiw-timeout-port
+        else
+            if $p->timeout == &bif_timer_timeout
+                tiw-timeout-bif_timer
+            else
+                if $p->timeout == &aux_work_timeout
+                    tiw-timeout-aux_work
+                end
+            end
+        end
+    end
+end
+
+define tiw-timeout-symbol-smp
+    if $p->timeout == &ptimer_timeout
+        tiw-timeout-ptimer
+    else
+        if $p->timeout == &bif_timer_timeout
+            tiw-timeout-bif_timer
+        else
+            if $p->timeout == &aux_work_timeout
+                tiw-timeout-aux_work
+            end
+        end
+    end
+end
+
+## auxiliary work
+define tiw-timeout-aux_work
+    printf "aux_work_timeout\nNULL\n"
+end
+
+## timers initiated by erlang:send_after/3 and erlang:start_timer/3 bifs
+define tiw-timeout-bif_timer
+    printf "bif_timer_timeout\n"
+    etp-pid-1 ((ErtsBifTimer*)($p->arg))->receiver.proc->ess->common.id
+    printf " ! "
+    etp ((ErtsBifTimer*)($p->arg))->message
+end
+
+## process timeout ('receive ... after' block, so also timer:sleep/1) for smp
+define tiw-timeout-ptimer
+    printf "ptimer_timeout\n"
+    etp-pid-1 ((ErtsSmpPTimer*)($p->arg))->timer->id
+    printf " | "
+    etp-port-1 ((ErtsSmpPTimer*)($p->arg))->timer->id
+    printf "\n"
+end
+
+## process timeout but without smp
+define tiw-timeout-proc
+    printf "timeout_proc\n"
+    etp-pid-1 ((Process*)($p->arg))->common.id
+    printf "\n"
+end
+
+## port timeout
+define tiw-timeout-port
+    printf "schedule_port_timeout\n"
+    etp-port-1 ((Port*)($p->arg))->common.id
+    printf "\n" 
+end
+
+define tiw
+    printf "=== tiw start\n"
+    printf "%d\n", tiw_pos
+
+    set $TIW_SIZE = 65536
+    set $i = tiw_pos
+    tiw-slot $i
+    set $i = ($i+1) % $TIW_SIZE
+    while ($i != tiw_pos)
+        tiw-slot $i
+        set $i = ($i+1) % $TIW_SIZE
+    end    
+    printf "=== tiw end\n"
+end
+
+# vi: ft=gdb
